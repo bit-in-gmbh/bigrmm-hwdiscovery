@@ -4,6 +4,9 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+- Track the independent repository version in `VERSION`, retaining the existing
+  `v1.3.0` tag, with an explicit manual SemVer release workflow.
+
 - Linux-Metadatenleser gegen übergroße Dateien und Spezialdateien gehärtet; udev-Dateinamen und sysfs-Pfadgrenzen vor der Abfrage geprüft.
 - macOS-Allokationen für CPU-Pakete und native Metadaten begrenzt; unvollständige Datensätze sowie negative und überlaufende Zahlen verworfen.
 - Windows-Speichergesamtsumme bei Überlauf ausgelassen und ungültige Chassiswerte vor der Typverengung abgewiesen.

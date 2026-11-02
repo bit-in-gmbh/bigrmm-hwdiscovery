@@ -272,6 +272,25 @@ Hardwarewerte bleiben ungeprüfte Angaben von Firmware, Treibern und Betriebssys
 
 Metadatenleser und native Puffer sind begrenzt; übergroße oder ungültige Angaben werden bestmöglich ausgelassen. Go 1.27.3 ist die minimale Buildversion. Änderungen, konkrete Grenzen und tatsächlich ausgeführte Prüfungen stehen im [Sicherheits- und Hardeningbericht vom 2. November 2026](docs/security-hardening-2026-11-02.md).
 
+## Repository version and releases
+
+The root `VERSION` file is the manually maintained repository version. It is
+independent of QS, software discovery and the management repositories. This
+library has no standalone executable and therefore no binary component version.
+`VERSION` starts at `1.3.0`; the existing `v1.3.0` tag is preserved at its original
+commit. The current checkout and its unreleased changes are not a replacement
+for that tagged release.
+
+Choose the next stable SemVer `X.Y.Z` manually according to the exported Go/JSON
+contract, update `VERSION` and `CHANGELOG.md`, and run the documented checks.
+Commit related changes together with a Conventional Commit subject. A later
+explicit release uses the tag `vX.Y.Z` matching `VERSION`; never move or reuse a
+published tag. No automatic bumps, tags or pushes are performed.
+
+QS builds read this version for package provenance alongside the exact source
+commit. The library itself is compiled into its caller and is not independently
+code-signed; signing and binary artifact reuse belong to the consuming release.
+
 ## License and third-party notices
 
 The project is licensed under Apache-2.0. Dependency and design-reference notices are in [ACKNOWLEDGMENTS.md](ACKNOWLEDGMENTS.md).
