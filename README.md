@@ -268,6 +268,10 @@ This module collects hardware identity and configuration. It deliberately does n
 
 Inventory may contain serial numbers, UUIDs, MAC addresses, PnP identifiers, asset tags, device paths, and volume identifiers. These values can identify or correlate a device. Treat serialized inventory as sensitive operational data: minimize retention, restrict access, encrypt it in transit and at rest, and obtain any consent required by your policies or applicable law.
 
+Hardwarewerte bleiben ungeprüfte Angaben von Firmware, Treibern und Betriebssystem. Anwendungen müssen Inventartexte bei der Darstellung oder Protokollierung passend zum jeweiligen Ausgabeformat behandeln. Die Bibliothek erhöht keine Rechte und stellt keine Sicherheitsgrenze gegen einen kompromittierten Kernel oder Administrator dar.
+
+Metadatenleser und native Puffer sind begrenzt; übergroße oder ungültige Angaben werden bestmöglich ausgelassen. Go 1.27.3 ist die minimale Buildversion. Änderungen, konkrete Grenzen und tatsächlich ausgeführte Prüfungen stehen im [Sicherheits- und Hardeningbericht vom 2. November 2026](docs/security-hardening-2026-11-02.md).
+
 ## License and third-party notices
 
 The project is licensed under Apache-2.0. Dependency and design-reference notices are in [ACKNOWLEDGMENTS.md](ACKNOWLEDGMENTS.md).

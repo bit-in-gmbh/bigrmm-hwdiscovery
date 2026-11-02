@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented in this file.
 
+## Unreleased
+
+- Linux-Metadatenleser gegen übergroße Dateien und Spezialdateien gehärtet; udev-Dateinamen und sysfs-Pfadgrenzen vor der Abfrage geprüft.
+- macOS-Allokationen für CPU-Pakete und native Metadaten begrenzt; unvollständige Datensätze sowie negative und überlaufende Zahlen verworfen.
+- Windows-Speichergesamtsumme bei Überlauf ausgelassen und ungültige Chassiswerte vor der Typverengung abgewiesen.
+- Minimale Go-Version auf 1.27.3 angehoben; CI-Actions per Commit fixiert, Checkout-Zugangsdaten nicht persistiert und Modul-/Schwachstellenprüfung ergänzt.
+
 ## 1.3.0 - 2026-09-18
 
 - Added complete best-effort macOS hardware discovery on amd64 and arm64 through Darwin sysctls and the in-process CoreFoundation, IOKit, Disk Arbitration, and System Configuration frameworks, with a sysctl-only fallback for cgo-disabled builds.
