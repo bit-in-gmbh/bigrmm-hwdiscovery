@@ -6,7 +6,9 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/json"
+	"math"
 	"runtime"
+	"strconv"
 	"testing"
 )
 
@@ -112,6 +114,35 @@ func TestDarwinMalformedInputsAreIsolated(t *testing.T) {
 	}
 	if inventory.Disks[0].Index != nil || inventory.Disks[0].CapacityBytes != 0 || inventory.NetworkAdapters[0].MACAddress != "" || len(inventory.GPUs) != 0 {
 		t.Fatalf("malformed values were accepted: %#v", inventory)
+	}
+}
+
+func TestDarwinInvalidPackageCountIsIsolated(t *testing.T) {
+	for _, packages := range []uint64{1025, math.MaxInt64, math.MaxUint64} {
+		t.Run(strconv.FormatUint(packages, 10), func(t *testing.T) {
+			inventory := discoverDarwin(darwinSysctlValues{
+				strings: map[string]string{"hw.model": "Macmini9,1"},
+				uints:   map[string]uint64{"hw.memsize": 16 << 30, "hw.packages": packages},
+			}, darwinNativeInventory{})
+			if len(inventory.Processors) != 0 {
+				t.Fatalf("invalid package count produced %d processors", len(inventory.Processors))
+			}
+			if inventory.System == nil || inventory.Memory == nil || inventory.Memory.InstalledPhysicalBytes != 16<<30 {
+				t.Fatal("invalid package count discarded independent inventory")
+			}
+		})
+	}
+	for _, counts := range []struct{ physical, logical uint64 }{{1, 8}, {8, 1}} {
+		if got := collectDarwinProcessors(darwinSysctlValues{uints: map[string]uint64{
+			"hw.packages": 2, "hw.physicalcpu": counts.physical, "hw.logicalcpu": counts.logical,
+		}}); len(got) != 0 {
+			t.Fatalf("package count exceeding processor topology was accepted: %#v", got)
+		}
+	}
+	if got := collectDarwinProcessors(darwinSysctlValues{uints: map[string]uint64{
+		"hw.packages": 2, "hw.physicalcpu": 8, "hw.logicalcpu": 16,
+	}}); len(got) != 2 || got[0].PhysicalCoreCount != 4 || got[0].LogicalProcessorCount != 8 {
+		t.Fatalf("valid multi-package topology changed: %#v", got)
 	}
 }
 

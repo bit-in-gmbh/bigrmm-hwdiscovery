@@ -4,7 +4,6 @@ package hwdiscovery
 
 import (
 	"math"
-	"os"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -104,7 +103,7 @@ func cpuDirectoryID(name string) (int, bool) {
 }
 
 func applyCPUInfo(source linuxSource, packages map[int]*linuxCPUPackage, topologyAvailable bool) {
-	data, err := os.ReadFile(source.proc("cpuinfo"))
+	data, err := readLinuxFile(source.proc("cpuinfo"), maxLinuxMetadataBytes)
 	if err != nil {
 		return
 	}
@@ -222,7 +221,7 @@ func collectLinuxMemory(source linuxSource) *Memory {
 }
 
 func linuxMemTotal(source linuxSource) uint64 {
-	data, err := os.ReadFile(source.proc("meminfo"))
+	data, err := readLinuxFile(source.proc("meminfo"), maxLinuxAttributeBytes)
 	if err != nil {
 		return 0
 	}

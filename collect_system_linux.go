@@ -3,7 +3,6 @@
 package hwdiscovery
 
 import (
-	"os"
 	"runtime"
 	"strconv"
 	"time"
@@ -95,7 +94,7 @@ func normalizeLinuxFirmwareDate(value string) string {
 }
 
 func firstNULFile(path string) string {
-	data, err := os.ReadFile(path)
+	data, err := readLinuxFile(path, maxLinuxAttributeBytes)
 	if err != nil {
 		return ""
 	}

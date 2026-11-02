@@ -48,7 +48,7 @@ func normalizeProcessorArchitecture(value *uint16) string {
 
 func normalizeChassisType(values []int32) string {
 	for _, value := range values {
-		if value >= 0 {
+		if value >= 0 && value <= 0xffff {
 			if normalized := chassisType(uint16(value)); normalized != "" {
 				return normalized
 			}

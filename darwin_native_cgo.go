@@ -12,15 +12,24 @@ package hwdiscovery
 #include <IOKit/storage/IOMedia.h>
 #include <SystemConfiguration/SystemConfiguration.h>
 #include <ctype.h>
+#include <errno.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+// Hardware properties are small metadata. Allow up to 1 MiB per property and
+// 16 MiB per collector, including terminators. Corrupt or excessive metadata
+// must not cause unbounded allocations; complete earlier rows remain usable.
+#define HW_MAX_PROPERTY_BYTES (1024 * 1024)
+#define HW_MAX_INVENTORY_BYTES (16 * 1024 * 1024)
+
 typedef struct {
 	char *data;
 	size_t length;
 	size_t capacity;
+	size_t row_start;
+	int failed;
 } hw_buffer;
 
 typedef struct {
@@ -29,7 +38,15 @@ typedef struct {
 } hw_blob;
 
 static int hw_buffer_reserve(hw_buffer *buffer, size_t extra) {
-	if (extra > SIZE_MAX - buffer->length - 1) {
+	if (buffer->failed) {
+		return 0;
+	}
+	if (buffer->length >= HW_MAX_INVENTORY_BYTES || extra > HW_MAX_INVENTORY_BYTES - buffer->length - 1) {
+		buffer->failed = 1;
+		buffer->length = buffer->row_start;
+		if (buffer->data != NULL) {
+			buffer->data[buffer->length] = '\0';
+		}
 		return 0;
 	}
 	size_t needed = buffer->length + extra + 1;
@@ -46,6 +63,11 @@ static int hw_buffer_reserve(hw_buffer *buffer, size_t extra) {
 	}
 	char *data = (char *)realloc(buffer->data, capacity);
 	if (data == NULL) {
+		buffer->failed = 1;
+		buffer->length = buffer->row_start;
+		if (buffer->data != NULL) {
+			buffer->data[buffer->length] = '\0';
+		}
 		return 0;
 	}
 	buffer->data = data;
@@ -69,10 +91,10 @@ static void hw_buffer_append(hw_buffer *buffer, const char *value) {
 }
 
 static void hw_buffer_append_clean(hw_buffer *buffer, const char *value) {
-	if (value == NULL) {
+	if (value == NULL || buffer->failed) {
 		return;
 	}
-	for (const unsigned char *cursor = (const unsigned char *)value; *cursor != 0; cursor++) {
+	for (const unsigned char *cursor = (const unsigned char *)value; *cursor != 0 && !buffer->failed; cursor++) {
 		char character = (char)*cursor;
 		if (character == '\t' || character == '\r' || character == '\n' || character == '\0') {
 			character = ' ';
@@ -82,6 +104,10 @@ static void hw_buffer_append_clean(hw_buffer *buffer, const char *value) {
 }
 
 static void hw_row_start(hw_buffer *buffer, const char *kind) {
+	if (buffer->failed) {
+		return;
+	}
+	buffer->row_start = buffer->length;
 	if (buffer->length != 0) {
 		hw_buffer_append(buffer, "\n");
 	}
@@ -142,6 +168,9 @@ static char *hw_cf_string(CFTypeRef value) {
 	} else if (type == CFDataGetTypeID()) {
 		CFDataRef data = (CFDataRef)value;
 		CFIndex length = CFDataGetLength(data);
+		if (length < 0 || length > HW_MAX_PROPERTY_BYTES) {
+			return NULL;
+		}
 		const UInt8 *bytes = CFDataGetBytePtr(data);
 		while (length > 0 && bytes[length - 1] == 0) {
 			length--;
@@ -173,7 +202,15 @@ static char *hw_cf_string(CFTypeRef value) {
 		return NULL;
 	}
 	CFIndex length = CFStringGetLength(string);
-	CFIndex maximum = CFStringGetMaximumSizeForEncoding(length, kCFStringEncodingUTF8) + 1;
+	CFIndex maximum = length < 0 || length > HW_MAX_PROPERTY_BYTES ? -1 :
+		CFStringGetMaximumSizeForEncoding(length, kCFStringEncodingUTF8);
+	if (maximum < 0 || maximum >= HW_MAX_PROPERTY_BYTES) {
+		if (releaseString) {
+			CFRelease(string);
+		}
+		return NULL;
+	}
+	maximum++;
 	char *result = (char *)malloc((size_t)maximum);
 	if (result == NULL || !CFStringGetCString(string, result, maximum, kCFStringEncodingUTF8)) {
 		free(result);
@@ -192,8 +229,8 @@ static uint64_t hw_cf_uint64(CFTypeRef value, int *ok) {
 	}
 	CFTypeID type = CFGetTypeID(value);
 	if (type == CFNumberGetTypeID()) {
-		uint64_t number = 0;
-		if (CFNumberGetValue((CFNumberRef)value, kCFNumberSInt64Type, &number)) {
+		int64_t number = 0;
+		if (CFNumberGetValue((CFNumberRef)value, kCFNumberSInt64Type, &number) && number >= 0) {
 			*ok = 1;
 			return number;
 		}
@@ -216,8 +253,9 @@ static uint64_t hw_cf_uint64(CFTypeRef value, int *ok) {
 		char *text = hw_cf_string(value);
 		if (text != NULL) {
 			char *end = NULL;
+			errno = 0;
 			uint64_t number = strtoull(text, &end, 0);
-			if (end != text && *end == '\0') {
+			if (isdigit((unsigned char)text[0]) && errno != ERANGE && end != text && *end == '\0') {
 				*ok = 1;
 			}
 			free(text);

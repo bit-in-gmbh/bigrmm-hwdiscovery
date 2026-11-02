@@ -76,6 +76,7 @@ func collectMemory(q queryer, installedPhysicalBytes uint64) *Memory {
 
 	modules := make([]MemoryModule, 0, len(rows))
 	var moduleCapacity uint64
+	capacityOverflow := false
 	for _, row := range rows {
 		module := MemoryModule{
 			Bank:         cleanStringPtr(row.BankLabel),
@@ -90,6 +91,8 @@ func collectMemory(q queryer, installedPhysicalBytes uint64) *Memory {
 			module.CapacityBytes = *row.Capacity
 			if ^uint64(0)-moduleCapacity >= *row.Capacity {
 				moduleCapacity += *row.Capacity
+			} else {
+				capacityOverflow = true
 			}
 		}
 		if row.ConfiguredClockSpeed != nil {
@@ -118,7 +121,7 @@ func collectMemory(q queryer, installedPhysicalBytes uint64) *Memory {
 		return left.PartNumber < right.PartNumber
 	})
 
-	if installedPhysicalBytes == 0 {
+	if installedPhysicalBytes == 0 && !capacityOverflow {
 		installedPhysicalBytes = moduleCapacity
 	}
 	if installedPhysicalBytes == 0 && len(modules) == 0 {

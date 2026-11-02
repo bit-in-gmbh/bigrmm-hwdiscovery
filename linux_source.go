@@ -3,12 +3,50 @@
 package hwdiscovery
 
 import (
+	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 )
+
+const (
+	// Individual sysfs, SMBIOS-record and udev attributes are small; allow 64 KiB
+	// while reserving a larger budget for complete CPU, mount and PCI databases.
+	maxLinuxAttributeBytes = 64 << 10
+	maxLinuxMetadataBytes  = 32 << 20
+)
+
+// Kernel files often report a zero size, so enforce the limit while reading.
+// Nonblocking open and a regular-file check also exclude FIFOs and devices.
+func readLinuxFile(path string, limit int64) ([]byte, error) {
+	file, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NONBLOCK, 0)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, errors.New("hardware metadata is not a regular file")
+	}
+	if info.Size() > limit {
+		return nil, errors.New("hardware metadata exceeds read limit")
+	}
+	data, err := io.ReadAll(io.LimitReader(file, limit+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > limit {
+		return nil, errors.New("hardware metadata exceeds read limit")
+	}
+	return data, nil
+}
 
 type linuxSource struct {
 	sysRoot    string
@@ -45,7 +83,7 @@ func (s linuxSource) run(parts ...string) string {
 }
 
 func readClean(path string) string {
-	value, err := os.ReadFile(path)
+	value, err := readLinuxFile(path, maxLinuxAttributeBytes)
 	if err != nil {
 		return ""
 	}
@@ -72,7 +110,7 @@ func readUint(path string, bitSize int) (uint64, bool) {
 }
 
 func readProperties(path string) map[string]string {
-	data, err := os.ReadFile(path)
+	data, err := readLinuxFile(path, maxLinuxAttributeBytes)
 	if err != nil {
 		return nil
 	}
@@ -90,6 +128,13 @@ func readProperties(path string) map[string]string {
 	return properties
 }
 
+func (s linuxSource) udevProperties(name string) map[string]string {
+	if name == "" || name == "." || name == ".." || filepath.Base(name) != name {
+		return nil
+	}
+	return readProperties(s.run("udev", "data", name))
+}
+
 func deviceProperties(start, stop string) map[string]string {
 	start, err := filepath.EvalSymlinks(start)
 	if err != nil {
@@ -97,12 +142,15 @@ func deviceProperties(start, stop string) map[string]string {
 	}
 	stop, _ = filepath.Abs(stop)
 	for path := start; path != "." && path != string(filepath.Separator); path = filepath.Dir(path) {
+		if !pathWithin(path, stop) {
+			break
+		}
 		if properties := readProperties(filepath.Join(path, "uevent")); len(properties) > 0 {
 			if properties["MODALIAS"] != "" || properties["PCI_SLOT_NAME"] != "" {
 				return properties
 			}
 		}
-		if path == stop || !pathWithin(path, stop) {
+		if path == stop {
 			break
 		}
 	}
@@ -172,7 +220,7 @@ func loadPCIDatabase(paths []string) pciDatabase {
 	var data []byte
 	for _, path := range paths {
 		var err error
-		data, err = os.ReadFile(path)
+		data, err = readLinuxFile(path, maxLinuxMetadataBytes)
 		if err == nil {
 			break
 		}

@@ -4,7 +4,6 @@ package hwdiscovery
 
 import (
 	"math"
-	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -83,7 +82,7 @@ func scanLinuxBlocks(source linuxSource) map[string]linuxBlock {
 	for _, name := range sortedDirNames(root) {
 		path := filepath.Join(root, name)
 		resolved, err := filepath.EvalSymlinks(path)
-		if err != nil {
+		if err != nil || !pathWithin(resolved, source.sysRoot) {
 			continue
 		}
 		uevent := readProperties(filepath.Join(path, "uevent"))
@@ -94,7 +93,7 @@ func scanLinuxBlocks(source linuxSource) map[string]linuxBlock {
 			resolved: resolved,
 			dev:      dev,
 			uevent:   uevent,
-			udev:     readProperties(source.run("udev", "data", "b"+dev)),
+			udev:     source.udevProperties("b" + dev),
 		}
 	}
 	return blocks
@@ -302,7 +301,7 @@ func linuxVolumeFromBlock(source linuxSource, block linuxBlock, mount linuxMount
 }
 
 func readLinuxMounts(source linuxSource, blocks map[string]linuxBlock) map[string]linuxMount {
-	data, err := os.ReadFile(source.proc("self", "mountinfo"))
+	data, err := readLinuxFile(source.proc("self", "mountinfo"), maxLinuxMetadataBytes)
 	if err != nil {
 		return nil
 	}

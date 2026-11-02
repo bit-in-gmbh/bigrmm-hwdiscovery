@@ -21,7 +21,7 @@ func collectLinuxNetworkAdapters(source linuxSource, pci pciDatabase) []NetworkA
 			continue
 		}
 		ifindex := readClean(filepath.Join(path, "ifindex"))
-		udev := readProperties(source.run("udev", "data", "n"+ifindex))
+		udev := source.udevProperties("n" + ifindex)
 		properties := deviceProperties(devicePath, source.sysRoot)
 		vendor, model := linuxDeviceNames(devicePath, udev, pci, source.sysRoot)
 		adapter := NetworkAdapter{
@@ -109,14 +109,15 @@ func collectLinuxGPUs(source linuxSource, pci pciDatabase) []GPU {
 	pciRoot := source.sys("bus", "pci", "devices")
 	for _, name := range sortedDirNames(pciRoot) {
 		path := filepath.Join(pciRoot, name)
+		resolved, err := filepath.EvalSymlinks(path)
+		if err != nil || !pathWithin(resolved, source.sysRoot) {
+			continue
+		}
 		class, ok := readUint(filepath.Join(path, "class"), 32)
 		if !ok || (class>>16)&0xff != 3 {
 			continue
 		}
-		resolved, err := filepath.EvalSymlinks(path)
-		if err == nil && pathWithin(resolved, source.sysRoot) {
-			devices[resolved] = path
-		}
+		devices[resolved] = path
 	}
 
 	drmRoot := source.sys("class", "drm")
@@ -140,7 +141,7 @@ func collectLinuxGPUs(source linuxSource, pci pciDatabase) []GPU {
 		slot := properties["PCI_SLOT_NAME"]
 		udev := map[string]string(nil)
 		if slot != "" {
-			udev = readProperties(source.run("udev", "data", "+pci:"+slot))
+			udev = source.udevProperties("+pci:" + slot)
 		}
 		vendor, model := linuxDeviceNames(path, udev, pci, source.sysRoot)
 		if model == "" {

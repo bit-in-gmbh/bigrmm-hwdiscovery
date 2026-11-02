@@ -4,7 +4,6 @@ package hwdiscovery
 
 import (
 	"encoding/binary"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -23,7 +22,7 @@ func readDMIRecords(source linuxSource, recordType uint8) []dmiRecord {
 		if !found || typeValue != strconv.Itoa(int(recordType)) {
 			continue
 		}
-		raw, err := os.ReadFile(filepath.Join(root, name, "raw"))
+		raw, err := readLinuxFile(filepath.Join(root, name, "raw"), maxLinuxAttributeBytes)
 		if err != nil {
 			continue
 		}

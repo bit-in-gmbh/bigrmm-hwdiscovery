@@ -206,7 +206,10 @@ func collectDarwinProcessors(sysctls darwinSysctlValues) []Processor {
 	if packages == 0 && (physical != 0 || logical != 0 || sysctls.strings["machdep.cpu.brand_string"] != "") {
 		packages = 1
 	}
-	if packages == 0 || packages > uint64(math.MaxInt) {
+	// A corrupt sysctl must not control an unbounded slice allocation. This is
+	// deliberately far above the package count of supported Mac hardware.
+	if packages == 0 || packages > 1024 || (physical != 0 && packages > physical) ||
+		(logical != 0 && packages > logical) {
 		return nil
 	}
 
